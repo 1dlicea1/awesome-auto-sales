@@ -1,0 +1,27 @@
+{
+  "name": "awesome-auto-sales",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1dlicea1/awesome-auto-sales.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/1dlicea1/awesome-auto-sales/issues"
+  },
+  "homepage": "https://github.com/1dlicea1/awesome-auto-sales#readme",
+  "dependencies": {
+    "dotenv": "^16.0.1",
+    "ejs": "^3.1.7",
+    "express": "^4.18.1",
+    "multer": "^1.4.4"
+  }
+}

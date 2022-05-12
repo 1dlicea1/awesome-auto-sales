@@ -1,0 +1,21 @@
+<%- include("_header") -%>
+
+<h1>Hello <%= name %></h1>
+<h2>Below are the services we provide</h2>
+<ul>
+    <% data.services.forEach(service => { %>
+        <li>
+            <%= service.name %> - <%= service.desc %>
+        </li>
+    <% }); %>
+</ul>
+
+<h3>Thank you for being with us for <%= data.years %> 
+    <% if(data.years > 1) { %> 
+        years 
+    <% } else { %> 
+        year 
+    <% };%>
+</h3>
+
+<%- include("_footer") -%>
