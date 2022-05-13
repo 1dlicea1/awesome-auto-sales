@@ -1,26 +1,39 @@
 // Load packages and access services
 const express = require("express");
 const app = express();
-
-const multer = require("multer");
-const upload = multer();
+const path = require("path");
 
 require('dotenv').config()
 
 
 
+const multer = require("multer");
+const upload = multer();
+
+const dblib = require("./dblib.js");
+
 // Setup view engine to ejs
 app.set('view engine', 'ejs');
-
+app.set("views", path.join(__dirname, "views"));
+app.use(express.static("public"));
 // Serve static content directly
 app.use(express.static("css"));
-
 
 // Add database package and connection string (can remove ssl)
 const { Pool } = require('pg');
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
+
+// Start listening to incoming requests
+// If process.env.PORT is not defined, port number 3000 is used
+const listener = app.listen(process.env.PORT || 3000, () => {
+    console.log(`Your app is listening on port ${listener.address().port}`);
+});
+
 
 
 // Add middleware to parse default urlencoded form
@@ -38,46 +51,131 @@ app.use((req, res, next) => {
   
 
 // Route to welcome page
-app.get('/', (request, response) => {
-    response.render("index");
-});
-
-
-// GET Route to form page
-app.get('/formPost', (request, response) => {
-    const message = "get";
-    const data = {
-        name: "",
-        email: "",
-        payment: ""
-    };
-    response.render("formPost", 
-        {
+app.get("/", (req, res) => {
+    //res.send ("Hello world...");
+    const sql = "SELECT * FROM CUSTOMER ORDER BY CUST_ID";
+    pool.query(sql, [], (err, result) => {
+        var message = "";
+        var model = {};
+        if(err) {
+            message = `Error - ${err.message}`;
+        } else {
+            message = "success";
+            model = result.rows;
+        };
+        res.render("index", {
             message: message,
-            data: data
+            model : model
         });
-
-});
-
-// POST Route to form page
-//app.post('/formPost', (request, response) => {
-    app.post('/formPost', upload.array(), (request, response) => {    
-        const message = "post";
-        // Send form data back to the form
-        const data = {
-            name: request.body.name,
-            email: request.body.email,
-            payment: request.body.payment
-        }
-        //Call formPost passing message and name
-        response.render("formPost", 
-            {
-                message: message,
-                data: data
-            });
     });
-////////////////////////////////////////////////////////////////////////////////////////////////////////////    
-    
+  });
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GET /delete/5
+app.get("/delete/:id", (req, res) => {
+    const id = req.params.id;
+    const sql = "SELECT * FROM customers WHERE cust_id = $1";
+    pool.query(sql, [id], (err, result) => {
+      // if (err) ...
+      res.render("delete", { model: result.rows[0] });
+    });
+  });
+
+// POST /delete/5
+app.post("/delete/:id", (req, res) => {
+    const id = req.params.id;
+    const sql = "DELETE FROM customer WHERE cust_id = $1";
+    pool.query(sql, [id], (err, result) => {
+      // if (err) ...
+      res.redirect("/books");
+    });
+  });
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GET /create
+app.get("/create", (req, res) => {
+    res.render("create", { model: {} });
+  });
+
+// POST /create
+app.post("/create", (req, res) => {
+    const sql = "INSERT INTO CUSTOMER (fisrt_name, last_name, state, sales_ytd, sales_ly) VALUES ($1, $2, $3, $4, $5)";
+    const cust = [req.body.first_name, req.body.last_name, req.body.state, req.body.sales_ytd, req.body.sale_ly];
+    pool.query(sql, cust, (err, result) => {
+      // if (err) ...
+      res.redirect("/");
+    });
+  });
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GET /edit/5
+app.get("/edit/:id", (req, res) => {
+    const id = req.params.id;
+    const sql = "SELECT * FROM CUSTOMER WHERE cust_id = $1";
+    pool.query(sql, [id], (err, result) => {
+      // if (err) ...
+      res.render("edit", { model: result.rows[0] });
+    });
+  });
+
+//POST /edit/5
+app.post("/edit/:id", (req, res) => {
+    const id = req.params.id;
+    const cust = [req.body.first_name, req.body.last_name, req.body.state, req.body.sales_ytd, req.body.sale_ly, id];
+    const sql = "UPDATE CUSTOMER SET first_name = $1, last_name = $2, state = $3, sales_ytd = $4. sales_ly = $5 WHERE (cust_id = $6)";
+    pool.query(sql, cust, (err, result) => {
+      if (err) {
+      res.redirect("/");}
+    });
+  });
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.get("/search", async (req, res) => {
+    // Omitted validation check
+    const totRecs = await dblib.getTotalRecords();
+    //Create an empty product object (To populate form with values)
+    const cust = {
+        cust_id: "",
+        first_name: "",
+        last_name: "",
+        state: "",
+        sales_ytd: "",
+        sales_ly: ""
+    };
+    res.render("search", {
+        type: "get",
+        totRecs: totRecs.totRecords,
+        cust: cust
+    });
+  });
+  
+  // POST
+  app.post("/search", async (req, res) => {
+    // Omitted validation check
+    //  Can get this from the page rather than using another DB call.
+    //  Add it as a hidden form value.
+    const totRecs = await dblib.getTotalRecords();
+  
+    console.log("in search post.  req.body is: ", req.body);
+  
+    dblib.findCustomers(req.body)
+        .then(result => {
+            console.log("dblib.findCustomers result is: ", result);
+            res.render("search", {
+                type: "post",
+                totRecs: totRecs.totRecords,
+                result: result,
+                cust: req.body
+            })
+        })
+        .catch(err => {
+            res.render("search", {
+                type: "post",
+                totRecs: totRecs.totRecords,
+                result: `Unexpected Error: ${err.message}`,
+                cust: req.body
+            });
+        });
+  });
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
     app.get("/input", (req, res) => {
         res.render("input");
      });
@@ -95,7 +193,7 @@ app.get('/formPost', (request, response) => {
               //console.log(line);
               product = line.split(",");
               //console.log(product);
-              const sql = "INSERT INTO PRODUCT(prod_id, prod_name, prod_desc, prod_price) VALUES ($1, $2, $3, $4)";
+              const sql = "INSERT INTO CUSTOMER (cust_id, first_name, last_name, state, sales_ytd, sales_ly) VALUES ($1, $2, $3, $4, $5, $6)";
               pool.query(sql, product, (err, result) => {
                   if (err) {
                       console.log(`Insert Error.  Error message: ${err.message}`);
@@ -108,51 +206,27 @@ app.get('/formPost', (request, response) => {
          res.send(message);
      });
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-     app.get("/output", (req, res) => {
-        var message = "";
-        res.render("output",{ message: message });
+app.get("/output", (req, res) => {
+    var message = "";
+    res.render("output",{ message: message });
+   });
+   
+   
+   app.post("/output", (req, res) => {
+       const sql = "SELECT * FROM CUSTOMER ORDER BY CUST_ID";
+       pool.query(sql, [], (err, result) => {
+           var message = "";
+           if(err) {
+               message = `Error - ${err.message}`;
+               res.render("output", { message: message })
+           } else {
+               var output = "";
+               result.rows.forEach(customer => {
+                   output += `${customer.cust_id},${customer.first_name},${customer.last_name},${customer.state},${customer.sales_ytd},${customer.sales_ly}\r\n`;
+               });
+               res.header("Content-Type", "text/csv");
+               res.attachment("export.csv");
+               return res.send(output);
+           };
        });
-       
-       
-       app.post("/output", (req, res) => {
-           const sql = "SELECT * FROM PRODUCT ORDER BY PROD_ID";
-           pool.query(sql, [], (err, result) => {
-               var message = "";
-               if(err) {
-                   message = `Error - ${err.message}`;
-                   res.render("output", { message: message })
-               } else {
-                   var output = "";
-                   result.rows.forEach(product => {
-                       output += `${product.prod_id},${product.prod_name},${product.prod_desc},${product.prod_price}\r\n`;
-                   });
-                   res.header("Content-Type", "text/csv");
-                   res.attachment("export.csv");
-                   return res.send(output);
-               };
-           });
-       });
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Start listening to incoming requests
-// If process.env.PORT is not defined, port number 3000 is used
-const listener = app.listen(process.env.PORT || 3000, () => {
-    console.log(`Your app is listening on port ${listener.address().port}`);
-});
-
-// GET Route to form page
-app.get('/formAjax', (request, response) => {
-    response.render("formAjax")
-});
-
-// POST Route to form page
-app.post('/formAjax', upload.array(), (request, response) => {    
-    // Send form data back to the form
-    const data = {
-        name: request.body.name,
-        email: request.body.email,
-        payment: request.body.payment
-    };
-    //Call formPost passing message and name
-    response.json(data);
-});
-
+   });
